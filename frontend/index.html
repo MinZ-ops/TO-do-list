@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src *; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://to-do-list-tan-mu.vercel.app; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://to-do-list-tan-mu.vercel.app">
     <title>待办事项</title>
     <style>
         body {
@@ -142,7 +142,6 @@
 
     <div class="category-filter" id="categoryFilter">
         <button onclick="setCategory(null)" class="active">所有分类</button>
-        <!-- 分类按钮将通过 JavaScript 动态添��� -->
     </div>
 
     <div class="add-category">
@@ -158,7 +157,6 @@
             <option value="3">高优先级</option>
         </select>
         <select id="categorySelect" class="category-selector">
-            <!-- 分类选项将通过 JavaScript 动态添加 -->
         </select>
         <input type="text" class="todo-input" placeholder="添加新的待办事项..." id="newTodo">
     </div>
@@ -166,22 +164,25 @@
     <ul class="todo-list" id="todoList"></ul>
 
     <script>
-        const API_URL = '/api';
+        const API_URL = 'https://to-do-list-tan-mu.vercel.app/api';
         let currentFilter = 'all';
         let currentCategory = null;
         let categories = [];
         
-        // 获取所有分类
         async function fetchCategories() {
-            const response = await fetch(`${API_URL}/categories`);
-            categories = await response.json();
-            updateCategoryUI();
-            
+            try {
+                const response = await fetch(`${API_URL}/categories`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                categories = await response.json();
+                updateCategoryUI();
+            } catch (error) {
+                console.error('Error fetching categories:', error);
+            }
         }
 
-        // 更新分类相关的UI
         function updateCategoryUI() {
-            // 更新分类筛选按钮
             const categoryFilter = document.getElementById('categoryFilter');
             categoryFilter.innerHTML = `
                 <button onclick="setCategory(null)" class="${!currentCategory ? 'active' : ''}">
@@ -195,7 +196,6 @@
                 `).join('')}
             `;
 
-            // 更新分类选择下拉框
             const categorySelect = document.getElementById('categorySelect');
             categorySelect.innerHTML = `
                 <option value="">选择分类...</option>
@@ -205,34 +205,37 @@
             `;
         }
 
-        // 设置当前分类
         async function setCategory(categoryId) {
             currentCategory = categoryId;
             updateCategoryUI();
             await fetchTodos();
         }
 
-        // 添加新分类
         async function addCategory() {
-            const input = document.getElementById('newCategory');
-            const name = input.value.trim();
-            if (!name) return;
+            try {
+                const input = document.getElementById('newCategory');
+                const name = input.value.trim();
+                if (!name) return;
 
-            const response = await fetch(`${API_URL}/categories`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name }),
-            });
+                const response = await fetch(`${API_URL}/categories`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name }),
+                });
 
-            if (response.ok) {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 input.value = '';
                 await fetchCategories();
+            } catch (error) {
+                console.error('Error adding category:', error);
             }
         }
 
-        // 设置筛选
         async function setFilter(filter) {
             currentFilter = filter;
             document.querySelectorAll('.filter-buttons button').forEach(btn => {
@@ -242,91 +245,120 @@
             await fetchTodos();
         }
 
-        // 获取待办事项
         async function fetchTodos() {
-            let url = `${API_URL}/todos?status=${currentFilter}`;
-            if (currentCategory) {
-                url += `&category_id=${currentCategory}`;
+            try {
+                let url = `${API_URL}/todos?status=${currentFilter}`;
+                if (currentCategory) {
+                    url += `&category_id=${currentCategory}`;
+                }
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const todos = await response.json();
+                displayTodos(todos);
+                updateCount(todos);
+            } catch (error) {
+                console.error('Error fetching todos:', error);
             }
-            const response = await fetch(url);
-            const todos = await response.json();
-            displayTodos(todos);
-            updateCount(todos);
         }
 
-        // 更新计数
         function updateCount(todos) {
             const activeCount = todos.filter(todo => !todo.completed).length;
             document.getElementById('activeCount').textContent = activeCount;
         }
 
-        // 添加新的待办事项
         async function addTodo(title) {
-            const priority = document.getElementById('prioritySelect').value;
-            const categoryId = document.getElementById('categorySelect').value;
-            
-            const response = await fetch(`${API_URL}/todos`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    title,
-                    priority: parseInt(priority),
-                    category_id: categoryId ? parseInt(categoryId) : null
-                }),
-            });
-            if (response.ok) {
-                fetchTodos();
+            try {
+                const priority = document.getElementById('prioritySelect').value;
+                const categoryId = document.getElementById('categorySelect').value;
+                
+                const response = await fetch(`${API_URL}/todos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        title,
+                        priority: parseInt(priority),
+                        category_id: categoryId ? parseInt(categoryId) : null
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                await fetchTodos();
+            } catch (error) {
+                console.error('Error adding todo:', error);
             }
         }
 
-        // 清除已完成
         async function clearCompleted() {
-            const response = await fetch(`${API_URL}/todos/clear-completed`, {
-                method: 'DELETE',
-            });
-            if (response.ok) {
-                fetchTodos();
+            try {
+                const todos = await (await fetch(`${API_URL}/todos`)).json();
+                for (const todo of todos) {
+                    if (todo.completed) {
+                        await deleteTodo(todo.id);
+                    }
+                }
+                await fetchTodos();
+            } catch (error) {
+                console.error('Error clearing completed todos:', error);
             }
         }
 
-        // 全选/取消全选
         async function toggleAll() {
-            const todos = await (await fetch(`${API_URL}/todos`)).json();
-            const allCompleted = todos.every(todo => todo.completed);
-            
-            for (const todo of todos) {
-                await updateTodo(todo.id, { completed: !allCompleted });
+            try {
+                const todos = await (await fetch(`${API_URL}/todos`)).json();
+                const allCompleted = todos.every(todo => todo.completed);
+                
+                for (const todo of todos) {
+                    await updateTodo(todo.id, { completed: !allCompleted });
+                }
+                await fetchTodos();
+            } catch (error) {
+                console.error('Error toggling all todos:', error);
             }
-            fetchTodos();
         }
 
-        // 更新待办事项状态
         async function updateTodo(id, updates) {
-            const response = await fetch(`${API_URL}/todos/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updates),
-            });
-            if (response.ok) {
-                fetchTodos();
+            try {
+                const response = await fetch(`${API_URL}/todos/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updates),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                await fetchTodos();
+            } catch (error) {
+                console.error('Error updating todo:', error);
             }
         }
 
-        // 删除待办事项
         async function deleteTodo(id) {
-            const response = await fetch(`${API_URL}/todos/${id}`, {
-                method: 'DELETE',
-            });
-            if (response.ok) {
-                fetchTodos();
+            try {
+                const response = await fetch(`${API_URL}/todos/${id}`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                await fetchTodos();
+            } catch (error) {
+                console.error('Error deleting todo:', error);
             }
         }
 
-        // 显示待办事项列表
         function displayTodos(todos) {
             const todoList = document.getElementById('todoList');
             todoList.innerHTML = '';
@@ -382,7 +414,6 @@
             });
         }
 
-        // 开始编辑待办事项
         function startEditing(li, todo) {
             const content = li.querySelector('.todo-content');
             const span = content.querySelector('span');
@@ -408,7 +439,6 @@
             });
         }
 
-        // 事件监听
         document.getElementById('newTodo').addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && e.target.value.trim()) {
                 addTodo(e.target.value.trim());
@@ -416,7 +446,6 @@
             }
         });
 
-        // 初始化
         document.addEventListener('DOMContentLoaded', () => {
             fetchCategories();
             fetchTodos();
