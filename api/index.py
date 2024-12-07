@@ -6,30 +6,45 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# 数据库初始化
-def init_db():
-    conn = sqlite3.connect('todos.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS categories
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT NOT NULL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS todos
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  title TEXT NOT NULL,
-                  completed BOOLEAN NOT NULL DEFAULT 0,
-                  priority INTEGER DEFAULT 0,
-                  category_id INTEGER,
-                  FOREIGN KEY (category_id) REFERENCES categories (id))''')
-    conn.commit()
-    conn.close()
+# 获取数据库路径
+DB_PATH = os.path.join(os.path.dirname(__file__), 'todos.db')
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # 初始化数据库
-init_db()
+def init_db():
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS categories
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      name TEXT NOT NULL)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS todos
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      title TEXT NOT NULL,
+                      completed BOOLEAN NOT NULL DEFAULT 0,
+                      priority INTEGER DEFAULT 0,
+                      category_id INTEGER,
+                      FOREIGN KEY (category_id) REFERENCES categories (id))''')
+        conn.commit()
+        conn.close()
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+
+# 添加错误处理
+@app.errorhandler(Exception)
+def handle_error(e):
+    print(f"Error: {str(e)}")
+    return jsonify({"error": str(e)}), 500
 
 # 获取所有待办事项
 @app.route('/api/todos', methods=['GET'])
 def get_todos():
-    conn = sqlite3.connect('todos.db')
+    conn = get_db()
     c = conn.cursor()
     status = request.args.get('status', 'all')
     category_id = request.args.get('category_id')
@@ -57,21 +72,24 @@ def get_todos():
 # 添加新的待办事项
 @app.route('/api/todos', methods=['POST'])
 def add_todo():
-    data = request.json
-    conn = sqlite3.connect('todos.db')
-    c = conn.cursor()
-    c.execute('INSERT INTO todos (title, priority, category_id) VALUES (?, ?, ?)',
-              (data['title'], data.get('priority', 0), data.get('category_id')))
-    conn.commit()
-    todo_id = c.lastrowid
-    conn.close()
-    return jsonify({'id': todo_id, 'title': data['title'], 'completed': False})
+    try:
+        data = request.json
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('INSERT INTO todos (title, priority, category_id) VALUES (?, ?, ?)',
+                  (data['title'], data.get('priority', 0), data.get('category_id')))
+        conn.commit()
+        todo_id = c.lastrowid
+        conn.close()
+        return jsonify({'id': todo_id, 'title': data['title'], 'completed': False})
+    except Exception as e:
+        return handle_error(e)
 
 # 更新待办事项
 @app.route('/api/todos/<int:todo_id>', methods=['PUT'])
 def update_todo(todo_id):
     data = request.json
-    conn = sqlite3.connect('todos.db')
+    conn = get_db()
     c = conn.cursor()
     updates = []
     values = []
@@ -92,7 +110,7 @@ def update_todo(todo_id):
 # 删除待办事项
 @app.route('/api/todos/<int:todo_id>', methods=['DELETE'])
 def delete_todo(todo_id):
-    conn = sqlite3.connect('todos.db')
+    conn = get_db()
     c = conn.cursor()
     c.execute('DELETE FROM todos WHERE id = ?', (todo_id,))
     conn.commit()
@@ -102,7 +120,7 @@ def delete_todo(todo_id):
 # 清除已完成的待办事项
 @app.route('/api/todos/clear-completed', methods=['DELETE'])
 def clear_completed():
-    conn = sqlite3.connect('todos.db')
+    conn = get_db()
     c = conn.cursor()
     c.execute('DELETE FROM todos WHERE completed = 1')
     conn.commit()
@@ -113,3 +131,9 @@ def clear_completed():
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
     # ... 代码内容 
+
+# 初始化数据库
+init_db()
+
+if __name__ == '__main__':
+    app.run(debug=True)
