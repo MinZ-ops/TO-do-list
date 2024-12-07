@@ -1,18 +1,14 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
-import os
-from datetime import datetime
+import datetime
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # 启用跨域请求支持
 
-# 数据库路径
-DB_PATH = '/tmp/todos.db'
-
-# 初始化数据库
+# 创建数据库和表
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     
     # 创建分类表
@@ -22,7 +18,7 @@ def init_db():
          name TEXT NOT NULL UNIQUE)
     ''')
     
-    # 创建待办事项表
+    # 创建待办事项表，添加category_id字段
     c.execute('''
         CREATE TABLE IF NOT EXISTS todos
         (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,28 +36,32 @@ def init_db():
         try:
             c.execute('INSERT INTO categories (name) VALUES (?)', (category,))
         except sqlite3.IntegrityError:
-            pass
+            pass  # 如果分类已存在，跳过
     
     conn.commit()
     conn.close()
 
-# API 路由
-@app.route('/api/categories', methods=['GET'])
+# 初始化数据库
+init_db()
+
+# 获取所有分类
+@app.route('/categories', methods=['GET'])
 def get_categories():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     c.execute('SELECT * FROM categories')
     categories = [{'id': row[0], 'name': row[1]} for row in c.fetchall()]
     conn.close()
     return jsonify(categories)
 
-@app.route('/api/categories', methods=['POST'])
+# 添加新分类
+@app.route('/categories', methods=['POST'])
 def add_category():
     data = request.get_json()
     if not data or 'name' not in data:
         return jsonify({'error': 'Missing category name'}), 400
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     try:
         c.execute('INSERT INTO categories (name) VALUES (?)', (data['name'],))
@@ -73,12 +73,13 @@ def add_category():
         conn.close()
         return jsonify({'error': 'Category already exists'}), 400
 
-@app.route('/api/todos', methods=['GET'])
+# 获取所有待办事项
+@app.route('/todos', methods=['GET'])
 def get_todos():
     status = request.args.get('status', 'all')
     category_id = request.args.get('category_id')
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     
     query = 'SELECT t.*, c.name as category_name FROM todos t LEFT JOIN categories c ON t.category_id = c.id WHERE 1=1'
@@ -109,7 +110,8 @@ def get_todos():
     conn.close()
     return jsonify(todos)
 
-@app.route('/api/todos', methods=['POST'])
+# 添加新的待办事项
+@app.route('/todos', methods=['POST'])
 def add_todo():
     data = request.get_json()
     if not data or 'title' not in data:
@@ -118,7 +120,7 @@ def add_todo():
     priority = data.get('priority', 0)
     category_id = data.get('category_id')
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     c.execute('INSERT INTO todos (title, priority, category_id) VALUES (?, ?, ?)',
              (data['title'], priority, category_id))
@@ -134,10 +136,11 @@ def add_todo():
         'category_id': category_id
     }), 201
 
-@app.route('/api/todos/<int:todo_id>', methods=['PUT'])
+# 更新待办事项状态
+@app.route('/todos/<int:todo_id>', methods=['PUT'])
 def update_todo(todo_id):
     data = request.get_json()
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     
     if 'completed' in data:
@@ -151,14 +154,25 @@ def update_todo(todo_id):
     conn.close()
     return jsonify({'success': True})
 
-@app.route('/api/todos/<int:todo_id>', methods=['DELETE'])
+# 删除待办事项
+@app.route('/todos/<int:todo_id>', methods=['DELETE'])
 def delete_todo(todo_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect('todos.db')
     c = conn.cursor()
     c.execute('DELETE FROM todos WHERE id = ?', (todo_id,))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
 
-# 初始化
-init_db() 
+# 清除已完成的待办事项
+@app.route('/todos/clear-completed', methods=['DELETE'])
+def clear_completed():
+    conn = sqlite3.connect('todos.db')
+    c = conn.cursor()
+    c.execute('DELETE FROM todos WHERE completed = 1')
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5001)
