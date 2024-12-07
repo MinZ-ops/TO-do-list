@@ -4,13 +4,35 @@ import os
 import json
 
 app = Flask(__name__)
-CORS(app)
+
+# 更新 CORS 配置
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://to-do-list-tan-mu.vercel.app", "http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # 使用内存中的数据结构代替 SQLite
 todos = []
 categories = []
 todo_id_counter = 1
 category_id_counter = 1
+
+# 添加错误处理装饰器
+@app.errorhandler(500)
+def handle_500_error(e):
+    return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
+@app.errorhandler(404)
+def handle_404_error(e):
+    return jsonify({"error": "Not found", "details": str(e)}), 404
+
+# 添加健康检查端点
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
 
 @app.route('/api/todos', methods=['GET'])
 def get_todos():
